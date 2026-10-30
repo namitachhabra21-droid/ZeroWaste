@@ -14,15 +14,18 @@ def create_notebook():
    "source": [
     "# Food Waste Prediction System - Exploratory Data Analysis & Modeling\n",
     "\n",
+    "**Predictive Analysis — Course Project Submission**  \n",
+    "Submitted by: **Namita Chhabra** (Student ID: 2427030677)\n",
+    "\n",
     "Welcome to the beginner-friendly Jupyter Notebook for the **Food Waste Prediction System**.\n",
     "\n",
     "## Notebook Objectives:\n",
     "1. Load and inspect the synthetic food waste dataset.\n",
     "2. Perform data cleaning (handling missing values, duplicates).\n",
     "3. Perform Exploratory Data Analysis (EDA) using **Matplotlib only**.\n",
-    "4. Preprocess and encode categorical variables.\n",
+    "4. Build model features from information known **before** service (Food Consumed is left out).\n",
     "5. Train and compare 3 Regressors: **Linear Regression**, **Decision Tree**, and **Random Forest**.\n",
-    "6. Evaluate models using R2 Score and save the best performing model."
+    "6. Evaluate models on unseen test data using R2 Score and pick the best performing model."
    ]
   },
   {
@@ -50,6 +53,12 @@ def create_notebook():
     "from sklearn.tree import DecisionTreeRegressor\n",
     "from sklearn.ensemble import RandomForestRegressor\n",
     "from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error\n",
+    "from sklearn.inspection import permutation_importance\n",
+    "\n",
+    "# Let the notebook use common.py from the project folder (works from notebooks/ or the project root)\n",
+    "import sys\n",
+    "sys.path.extend(['..', '.'])\n",
+    "from common import build_features, TARGET\n",
     "\n",
     "# Set Matplotlib style parameters\n",
     "plt.rcParams['font.size'] = 10\n",
@@ -222,7 +231,13 @@ def create_notebook():
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "### Step 4: Categorical Feature Encoding & Data Splitting"
+    "### Step 4: Feature Building & Data Splitting\n",
+    "\n",
+    "`build_features()` (in `common.py`) one-hot encodes Food Category and Day of Week, and adds\n",
+    "*Prepared per Customer* and *Customers x Category* features.\n",
+    "\n",
+    "**Food_Consumed_kg is deliberately NOT used.** It is only measured after service, and waste is roughly\n",
+    "prepared minus consumed, so using it would leak the answer and inflate the scores."
    ]
   },
   {
@@ -231,12 +246,10 @@ def create_notebook():
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Perform One-Hot Encoding\n",
-    "df_encoded = pd.get_dummies(df, columns=['Food_Category', 'Day_of_Week'], drop_first=False)\n",
-    "\n",
     "# Separate Features (X) and Target (y)\n",
-    "X = df_encoded.drop(columns=['Food_Waste_kg'])\n",
-    "y = df_encoded['Food_Waste_kg']\n",
+    "X = build_features(df)\n",
+    "y = df[TARGET]\n",
+    "print('Features used:', list(X.columns))\n",
     "\n",
     "# Train-Test Split (80% train, 20% test)\n",
     "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
@@ -274,9 +287,13 @@ def create_notebook():
     "    results[name] = r2\n",
     "    predictions[name] = y_pred\n",
     "\n",
-    "print(\"=== R2 SCORE EVALUATION RESULTS ===\")\n",
+    "print(\"=== R2 SCORE EVALUATION RESULTS (test data) ===\")\n",
     "for name, score in results.items():\n",
-    "    print(f\"- {name} -> R2 Score: {score:.4f}\")"
+    "    print(f\"- {name} -> R2 Score: {score:.4f}\")\n",
+    "\n",
+    "best_name = max(results, key=results.get)\n",
+    "best_model = models[best_name]\n",
+    "print(f\"\\nBest model: {best_name}\")"
    ]
   },
   {
@@ -292,17 +309,17 @@ def create_notebook():
    "metadata": {},
    "outputs": [],
    "source": [
-    "rf_pred = predictions['Random Forest']\n",
+    "best_pred = predictions[best_name]\n",
     "\n",
     "fig, ax = plt.subplots(figsize=(8, 5))\n",
-    "ax.scatter(y_test, rf_pred, alpha=0.7, color='#059669', label='Predicted vs Actual')\n",
+    "ax.scatter(y_test, best_pred, alpha=0.7, color='#059669', label='Predicted vs Actual')\n",
     "\n",
     "# 45-degree reference line\n",
-    "min_val = min(y_test.min(), rf_pred.min())\n",
-    "max_val = max(y_test.max(), rf_pred.max())\n",
+    "min_val = min(y_test.min(), best_pred.min())\n",
+    "max_val = max(y_test.max(), best_pred.max())\n",
     "ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect Fit Line (1:1)')\n",
     "\n",
-    "ax.set_title('Actual vs Predicted Food Waste (Random Forest)', fontsize=12, fontweight='bold')\n",
+    "ax.set_title(f'Actual vs Predicted Food Waste - Test Data ({best_name})', fontsize=12, fontweight='bold')\n",
     "ax.set_xlabel('Actual Food Waste (kg)')\n",
     "ax.set_ylabel('Predicted Food Waste (kg)')\n",
     "ax.grid(True, linestyle='--', alpha=0.5)\n",
@@ -314,7 +331,9 @@ def create_notebook():
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "#### Visualization 6: Feature Importance using Random Forest"
+    "#### Visualization 6: Feature Importance (Permutation Importance)\n",
+    "\n",
+    "Shuffle one input at a time and measure how many extra kg of average error (MAE) the model makes. Works for any model type."
    ]
   },
   {
@@ -323,8 +342,9 @@ def create_notebook():
    "metadata": {},
    "outputs": [],
    "source": [
-    "rf_model = models['Random Forest']\n",
-    "importances = rf_model.feature_importances_\n",
+    "perm = permutation_importance(best_model, X_test, y_test, n_repeats=10, random_state=42,\n",
+    "                              scoring='neg_mean_absolute_error')\n",
+    "importances = perm.importances_mean\n",
     "feature_names = X.columns\n",
     "\n",
     "# Sort feature importances\n",
@@ -336,8 +356,8 @@ def create_notebook():
     "\n",
     "fig, ax = plt.subplots(figsize=(9, 5))\n",
     "ax.barh(sorted_features, sorted_importances, color='#EC4899', edgecolor='black', alpha=0.85)\n",
-    "ax.set_title('Top 10 Feature Importances (Random Forest Regressor)', fontsize=12, fontweight='bold')\n",
-    "ax.set_xlabel('Relative Importance')\n",
+    "ax.set_title(f'Top 10 Feature Importances ({best_name})', fontsize=12, fontweight='bold')\n",
+    "ax.set_xlabel('Extra error when shuffled (kg)')\n",
     "ax.grid(axis='x', linestyle='--', alpha=0.5)\n",
     "plt.show()"
    ]
@@ -352,7 +372,7 @@ def create_notebook():
  "nbformat_minor": 2
 }
     
-    output_dir = "notebooks"
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notebooks")
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, "food_waste_analysis.ipynb")
     

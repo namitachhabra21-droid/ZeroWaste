@@ -1,130 +1,347 @@
-# Food Waste Prediction System
+<div align="center">
 
-> A beginner-friendly Machine Learning project using Python, Pandas, Matplotlib, Scikit-learn, and Streamlit to predict food waste in kilograms, estimate financial loss across multiple country currencies (INR Rupees, USD, EUR, GBP, AED, CAD, AUD), and provide actionable reduction recommendations.
+# 🍲 ZeroWaste — Food Waste Prediction System
 
----
-## Project Overview
+**Forecast how much food a kitchen will waste *before* service starts — and what it will cost.**
 
-Food waste is a major operational challenge and financial loss for commercial kitchens, restaurants, and catering services. Over-preparing food leads to unnecessary environmental impact, higher costs, and inefficient resource allocation.
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?logo=scikitlearn&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-Data-150458?logo=pandas&logoColor=white)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-Charts-11557C)
+![Streamlit](https://img.shields.io/badge/Streamlit-Web%20App-FF4B4B?logo=streamlit&logoColor=white)
+![Test R²](https://img.shields.io/badge/Test%20R%C2%B2-0.934-2a78d6)
 
-The **Food Waste Prediction System** uses historical consumption data, customer counts, food category types, environmental temperature, and historical waste metrics to predict expected food waste in kilograms (kg) and calculate estimated monetary loss across multiple international currencies. Built with Python and Scikit-learn, the system deploys a trained **Random Forest Regressor** model to a multi-page **Streamlit** dashboard.
-
----
-## Problem Statement
-
-Commercial kitchens struggle to estimate the exact quantity of food needed for daily service due to fluctuating customer counts, event schedules, weather conditions, and service types. 
-
-By applying Machine Learning regression algorithms, this project enables kitchen managers to:
-1. Accurately predict expected food waste in kilograms before service begins.
-2. Calculate estimated financial loss in Indian Rupees (INR ₹), US Dollars ($), Euros (€), British Pounds (£), UAE Dirhams (AED), etc.
-3. Receive automated, clear recommendations to adjust food preparation quantities.
-4. Reduce financial loss and minimize environmental impact.
----
-## Features & Navigation Views
-
-The web application features 5 interactive views in the dark-mode sidebar:
-1. ** Predict Food Waste**: Interactive ML prediction, financial loss calculator & multi-currency comparison table.
-2. ** EDA Visualizations**: Interactive Matplotlib charts (Prepared vs Consumed, Waste Distribution, Category Averages, Customer Count correlation, Actual vs Predicted, Feature Importance).
-3. ** Dataset Explorer**: Interactive dataset preview, data types, null checks, summary statistics (`df.describe()`).
-4. ** Model Comparison (R²)**: Performance comparison of Linear Regression ($R^2 = 0.9964$), Decision Tree ($R^2 = 0.9044$), and Random Forest ($R^2 = 0.9551$).
-5. ** Jupyter Notebook & VS Code Guide**: Step-by-step setup guide and complete technical interview Q&A guide.
+</div>
 
 ---
-## Technologies Used
 
-| Technology | Purpose |
+## 🎓 Course Submission
+
+| | |
 | :--- | :--- |
-| **Python** | Core Programming Language |
-| **Pandas** | Data Loading, Cleaning, Manipulation & One-Hot Encoding |
-| **NumPy** | Numerical Operations & Array Calculations |
-| **Matplotlib** | Data Visualizations & Graphs (*Only Matplotlib used*) |
-| **Scikit-learn** | Machine Learning Pipelines, Regression Models & R2 Evaluation |
-| **Streamlit** | Interactive Web Application Dashboard |
-| **Pickle** | Model Serialization & Persistence (`.pkl`) |
-
-*Note: Seaborn, Joblib, Flask, FastAPI, and Gradio were intentionally NOT used as per constraints.*
+| **Course** | Predictive Analysis |
+| **Project** | ZeroWaste — Food Waste Prediction System |
+| **Submitted by** | Namita Chhabra |
+| **Student ID** | 2427030677 |
+| **Submitted** | October 2026 |
 
 ---
-## Dataset Description
 
-> **Note:** The dataset (`dataset/food_waste.csv`) is **synthetic** (artificially generated using realistic operational statistical distributions for educational and demonstration purposes).
+## 📑 Contents
 
-### Dataset Fields:
-1. `Number_of_Customers`: Total count of expected customers (e.g., 40 to 500).
-2. `Food_Prepared_kg`: Total weight of food prepared in kilograms (kg).
-3. `Food_Consumed_kg`: Total weight of food actually consumed in kilograms (kg).
-4. `Food_Category`: Type of dining service (`Buffet`, `Fast Food`, `Fine Dining`, `Bakery`, `Catering`).
-5. `Day_of_Week`: Day of the week (`Monday` to `Sunday`).
-6. `Holiday_Event`: Binary indicator (`1` for Holiday/Special Event, `0` for regular day).
-7. `Previous_Food_Waste_kg`: Historical waste benchmark (kg).
-8. `Temperature_C`: Ambient temperature in degrees Celsius (C).
-9. `Food_Waste_kg` (Target): Actual food waste in kilograms (kg).
+1. [At a Glance](#-at-a-glance)
+2. [Problem Statement](#-problem-statement)
+3. [Solution Pipeline](#-solution-pipeline)
+4. [Dataset](#-dataset)
+5. [Exploratory Data Analysis](#-exploratory-data-analysis)
+6. [Methodology](#-methodology)
+7. [Results](#-results)
+8. [Web Application](#-web-application)
+9. [Getting Started](#-getting-started)
+10. [Project Structure](#-project-structure)
+11. [Testing & Reproducibility](#-testing--reproducibility)
+12. [Limitations & Future Work](#-limitations--future-work)
+13. [Viva / Interview Q&A](#-viva--interview-qa)
 
 ---
-## Data Science Workflow
 
+## ⚡ At a Glance
+
+| | |
+| :--- | :--- |
+| **Task** | Supervised regression: predict `Food_Waste_kg` for a single service |
+| **Data** | 1,000 simulated kitchen services · 9 columns · 23 model features |
+| **Models compared** | Linear Regression · Decision Tree · Random Forest |
+| **Selected model** | **Linear Regression**, chosen automatically by best test R² |
+| **Test performance** | **R² = 0.934** · MAE = 5.62 kg · RMSE = 7.42 kg · 82% of predictions within ±10 kg |
+| **Key design choice** | No data leakage: only inputs known *before* service are used |
+| **Deliverable** | 5-page Streamlit app with multi-currency loss estimates and prep recommendations |
+
+---
+
+## 🎯 Problem Statement
+
+On average, the kitchens in this dataset throw away **23.6% of the food they prepare**. They prepare too much because tomorrow's demand is uncertain: customer counts change, holidays disrupt patterns, and hot weather lowers appetite and speeds up spoilage.
+
+**Objective:** given what a kitchen knows the morning of service, predict how many kilograms will be wasted so that the manager can:
+
+1. **Anticipate** waste before cooking starts.
+2. **Quantify** the financial loss in local currency (INR, USD, EUR, GBP, AED, CAD, AUD).
+3. **Act** on a recommended preparation quantity.
+
+---
+
+## 🔄 Solution Pipeline
+
+```mermaid
+flowchart LR
+    A[generate_dataset.py<br/>1,000 simulated services] --> B[(dataset/<br/>food_waste.csv)]
+    B --> C[common.py<br/>build_features]
+    C --> D[train_model.py<br/>80/20 split · 3 models]
+    D --> E{Best test R²}
+    E --> F[(model/<br/>food_waste_model.pkl<br/>model + scores + ranges)]
+    F --> G[app.py<br/>Streamlit dashboard]
+    F --> H[test_prediction.py<br/>sanity checks]
+    B --> I[notebooks/<br/>EDA & modelling]
 ```
-1. Load Dataset using Pandas
-2. Check Dataset Info & Missing Values
-3. Handle Missing Values & Remove Duplicates
-4. Perform EDA with Matplotlib
-5. Convert Categorical Variables - One-Hot Encoding
-6. Split Data: Train 80% / Test 20%
-7. Train Linear Regression, Decision Tree & Random Forest
-8. Calculate R2 Score for Each Model
-9. Select Random Forest Regressor (R2 = 0.9551)
-10. Save Model using Pickle - food_waste_model.pkl
-11. Deploy Interactive Web App using Streamlit
-```
-## Machine Learning Models & R2 Score Evaluation
 
-Models are trained on 80% of data and evaluated on 20% unseen test data using the **R2 Score** (Coefficient of Determination):
-
-- **Random Forest Regressor** -> R2 Score: `0.9551` *(Selected Saved Model)*
-- **Linear Regression** -> R2 Score: `0.9964`
-- **Decision Tree Regressor** -> R2 Score: `0.9044`
+A single feature function in [`common.py`](common.py) is shared by training, the app and the tests, so the model always gets identical inputs everywhere. The pickle file stores the model **and** its test scores, input ranges and importances, so the app never shows hard-coded numbers.
 
 ---
-## How to Install and Run in VS Code
 
-### 1. Open Terminal in VS Code
-Press `Ctrl + ~` in VS Code.
+## 📊 Dataset
 
-### 2. Install Required Packages
+> **Synthetic data.** No public dataset records per-service waste together with these drivers, so the data is simulated from a transparent model of kitchen behaviour ([`generate_dataset.py`](generate_dataset.py), fixed seed `42`).
+
+**How each service is simulated**
+
+1. Expected demand = customers × typical portion for the service type (Buffet 0.60 kg, Catering 0.55, Fine Dining 0.50, Fast Food 0.45, Bakery 0.35).
+2. The kitchen prepares that demand plus its own safety margin (**5–40% extra**, different for every service).
+3. Actual consumption varies with the day of the week, holidays (−7%), heat above 28 °C, and random noise (±5%).
+4. Waste = prepared − consumed + spoilage (buffet/catering/bakery display losses, heat) + noise.
+
+**Data dictionary**
+
+| Column | Type | Description | Model input? |
+| :--- | :--- | :--- | :---: |
+| `Number_of_Customers` | int | Expected customers (40–500) | ✅ |
+| `Food_Prepared_kg` | float | Food prepared (kg) | ✅ |
+| `Food_Category` | category | Buffet, Fast Food, Fine Dining, Bakery, Catering | ✅ |
+| `Day_of_Week` | category | Monday … Sunday | ✅ |
+| `Holiday_Event` | 0/1 | Holiday or special event | ✅ |
+| `Previous_Food_Waste_kg` | float | Waste at the kitchen's previous service | ✅ |
+| `Temperature_C` | float | Ambient temperature (15–38 °C) | ✅ |
+| `Food_Consumed_kg` | float | Food actually eaten, **known only after service** | ❌ *(leakage)* |
+| `Food_Waste_kg` | float | **Target:** food wasted (kg) | 🎯 |
+
+---
+
+## 🔍 Exploratory Data Analysis
+
+![EDA insights](docs/images/eda_insights.png)
+
+**What the data says**
+
+- **Over-preparation is the main driver.** Kitchens in the top quarter for food per customer waste **31.5%** of what they make, about twice the **15.5%** of the bottom quarter.
+- **Mondays waste the most (26.9%), Saturdays the least (20.5%).** Turnout is weakest early in the week, but kitchens don't scale prep down to match.
+- **Holidays and events add risk.** Waste rises from 22.7% to **27.2%** because demand is harder to predict.
+- **Heat matters.** Above 28 °C, waste rises from 21.8% to **26.0%**: people eat less and food spoils faster.
+- Waste per service is **right-skewed** (mean 39.1 kg, median 32.7 kg). Large buffets and catering events produce the long tail.
+
+---
+
+## 🧪 Methodology
+
+### 1. Avoiding data leakage
+
+`Food_Consumed_kg` is in the dataset, but a kitchen only learns it **after** service, and waste is essentially *prepared − consumed*. Using it as an input makes the model look perfect while being useless for planning:
+
+| Inputs used | Test R² | Usable before service? |
+| :--- | :---: | :---: |
+| With `Food_Consumed_kg` | 0.999 | ❌ No (the answer is in the inputs) |
+| **Without it (this project)** | **0.934** | ✅ Yes |
+
+### 2. Feature engineering ([`common.py`](common.py))
+
+| Feature | Why |
+| :--- | :--- |
+| 5 numeric inputs | Scale, quantity, events, history, weather |
+| One-hot `Food_Category` (5) and `Day_of_Week` (7) | Categorical → numeric without implying an order |
+| `Prepared_per_Customer` | How generous the kitchen is being, regardless of size |
+| `Customers × Category` (5) | Lets a linear model learn a **different portion size per service type** |
+
+### 3. Training & selection ([`train_model.py`](train_model.py))
+
+- 80/20 train-test split (`random_state=42`): 800 rows to train, 200 held out.
+- Three regressors: `LinearRegression`, `DecisionTreeRegressor(max_depth=10)`, `RandomForestRegressor(n_estimators=100)`.
+- The model with the **highest test R²** is saved automatically, so there is no hand-picking.
+- **Permutation importance** on the test set explains which inputs drive predictions. It works for any model type.
+
+### 4. Evaluation metrics
+
+$$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2} \qquad \text{MAE} = \frac{1}{n}\sum_i |y_i - \hat{y}_i| \qquad \text{RMSE} = \sqrt{\frac{1}{n}\sum_i (y_i - \hat{y}_i)^2}$$
+
+- **R²**: share of the variation in waste that the model explains (1.0 = perfect).
+- **MAE**: typical error in kilograms, the easiest to explain to a kitchen manager.
+- **RMSE**: like MAE, but penalises large misses more heavily.
+
+---
+
+## 🏆 Results
+
+| Model | Test R² | MAE (kg) | RMSE (kg) | |
+| :--- | :---: | :---: | :---: | :--- |
+| **Linear Regression** | **0.934** | **5.62** | **7.42** | ✅ Selected |
+| Random Forest | 0.883 | 6.95 | 9.90 | |
+| Decision Tree | 0.778 | 9.65 | 13.65 | |
+
+![Model comparison](docs/images/model_comparison.png)
+
+**Why the simplest model wins.** Waste is essentially *prepared − (customers × portion)*, which is a linear relationship once the `Customers × Category` features exist. Tree models have to approximate that straight line with steps and **cannot predict beyond the values they saw in training**, so they lose accuracy at the extremes.
+
+![Predictions on unseen data](docs/images/predictions.png)
+
+Predictions follow the 1:1 line closely across the full range. Errors are centred on zero with no systematic bias, and **82% of services are predicted within ±10 kg**.
+
+![Feature importance](docs/images/feature_importance.png)
+
+**Reading the model.** The fitted coefficients have a direct business meaning:
+
+| Finding | Effect on predicted waste |
+| :--- | :--- |
+| Each extra kg prepared (same customers) | **+0.98 kg waste**: almost every surplus kg is thrown away |
+| Holiday / special event | **+9.4 kg** |
+| Monday vs Saturday | **+9.5 kg** |
+| Each +1 °C temperature | **+0.56 kg** |
+
+---
+
+## 🖥️ Web Application
+
+`streamlit run app.py` opens a 5-page dashboard:
+
+| Page | What it does |
+| :--- | :--- |
+| 🔮 **Predict Food Waste** | Enter tomorrow's plan → predicted waste (kg), financial loss in 7 currencies, waste %, and a **suggested prep quantity** |
+| 📊 **EDA Visualizations** | Six interactive Matplotlib charts, including actual-vs-predicted on test data and feature importance |
+| 📋 **Dataset Explorer** | Preview, `describe()`, data types and null checks |
+| 🎯 **Model Comparison** | Live R² / MAE / RMSE for all three models from the last training run |
+| 📓 **Guide & Q&A** | Setup steps and viva questions, with answers that update from the trained model |
+
+**Built-in safeguards**
+- Inputs are limited to the range the model was trained on.
+- A warning appears when food per customer is unusual for the chosen service type.
+- Predictions are never negative.
+- On first launch the app generates the dataset and trains the model by itself.
+
+---
+
+## 🚀 Getting Started
+
 ```bash
+# 1. Clone and install
+git clone https://github.com/namitachhabra21-droid/ZeroWaste.git
+cd ZeroWaste
 pip install -r requirements.txt
-```
 
-### 3. Generate Dataset & Train Model
-```bash
+# 2. (Optional) rebuild data and model; the app does this automatically if missing
 python generate_dataset.py
 python train_model.py
-```
 
-### 4. Launch Streamlit Web App
-```bash
+# 3. Launch the dashboard → http://localhost:8501
 streamlit run app.py
 ```
 
-Streamlit will open in your browser at `http://localhost:8501`.
+**Optional extras**
+
+```bash
+python test_prediction.py      # run sanity checks
+python build_notebook.py       # regenerate notebooks/food_waste_analysis.ipynb
+python docs/make_figures.py    # regenerate the README charts
+```
 
 ---
 
-## Interview Explanation Guide
+## 📁 Project Structure
 
-### 1. What problem does this system solve?
-> *"This system predicts food waste in kilograms for commercial kitchens before daily operations begin. It solves over-preparation by providing waste forecasts, financial loss calculations in multiple currencies (e.g., INR Rupees, USD, EUR), and clear operational recommendations."*
-
-### 2. Why were these specific features selected?
-> *"The features represent operational scale (customers), physical quantity (prepared vs consumed), service style (buffet vs fine dining), weather impact (temperature), and historical trends."*
-
-### 3. Why is Random Forest preferred for real-world predictions?
-> *"Linear Regression assumes strict linear independent relationships and suffers from extreme multicollinearity when inputs like Customer Count and Food Prepared are correlated, resulting in extreme negative wild predictions. Random Forest averages multiple decision trees (bagging), capturing complex non-linear patterns reliably across all input ranges."*
-
-### 4. What does the R2 Score mean?
-> *"The R2 Score measures how well the regression model explains target variance. An R2 of 0.9551 means 95.51% of food waste variance is explained by our input features."*
+```
+ZeroWaste/
+├── app.py                      # Streamlit dashboard (5 pages)
+├── common.py                   # Shared paths + feature engineering
+├── generate_dataset.py         # Synthetic data simulation
+├── train_model.py              # Train, compare, select & save model
+├── test_prediction.py          # Sanity checks (plain Python or pytest)
+├── build_notebook.py           # Generates the analysis notebook
+├── requirements.txt
+├── dataset/
+│   └── food_waste.csv          # 1,000 simulated services
+├── notebooks/
+│   └── food_waste_analysis.ipynb
+├── docs/
+│   ├── make_figures.py         # Builds the charts in this README
+│   └── images/
+└── model/                      # Created by train_model.py (git-ignored)
+```
 
 ---
 
-### Author
-Created with Python, Pandas, Matplotlib, Scikit-learn & Streamlit.
+## ✅ Testing & Reproducibility
+
+`python test_prediction.py` verifies that:
+
+- [x] `Food_Consumed_kg` is **not** a model input (no leakage)
+- [x] The saved model is the best-scoring one
+- [x] Default predictions are in a realistic range
+- [x] Preparing more food predicts more waste
+- [x] No meaningfully negative predictions across each service type's training range
+
+Every random step uses seed `42`, so the data, the split and all reported numbers are fully reproducible.
+
+---
+
+## 🔭 Limitations & Future Work
+
+| Limitation | Next step |
+| :--- | :--- |
+| Data is simulated, not collected from real kitchens | Validate on real point-of-sale and waste-log data |
+| The model can't learn from kitchens that **under**-prepare (none exist in the data) | Collect shortage events and model waste as `max(0, …)` |
+| A single 80/20 split | k-fold cross-validation and hyper-parameter tuning |
+| One prediction per service | Forecast by dish or ingredient for finer-grained prep plans |
+| Fixed cost per kg per country | Live exchange rates and ingredient-level costing |
+
+---
+
+## 🎤 Viva / Interview Q&A
+
+<details>
+<summary><b>What problem does this project solve?</b></summary>
+
+It predicts food waste in kilograms before a kitchen starts cooking, converts it into a financial loss, and recommends how much to prepare, turning a guess into a data-driven decision.
+</details>
+
+<details>
+<summary><b>Why isn't Food Consumed used as an input?</b></summary>
+
+It is only known after service, and waste ≈ prepared − consumed. Including it is **data leakage**: test R² jumps to 0.999, but the model can't be used to plan tomorrow's service.
+</details>
+
+<details>
+<summary><b>Why did Linear Regression beat Random Forest?</b></summary>
+
+The underlying relationship is close to linear once portion size per service type is captured by the `Customers × Category` features. Trees approximate straight lines with steps and can't extrapolate beyond the training range. The choice is made automatically by best test R².
+</details>
+
+<details>
+<summary><b>What does R² = 0.934 mean?</b></summary>
+
+The model explains about 93% of the variation in food waste across unseen services. In practical terms, the average error (MAE) is 5.6 kg.
+</details>
+
+<details>
+<summary><b>What is permutation importance?</b></summary>
+
+Shuffle one input column in the test set and measure how much worse the predictions get. A large increase in error means the model depends heavily on that input. It works for any model type.
+</details>
+
+<details>
+<summary><b>Why use the synthetic data?</b></summary>
+
+No public dataset links per-service waste to these operational drivers. A transparent simulation makes the ground truth known, so we can check that the model recovers real effects (e.g. +0.98 kg waste per extra kg prepared).
+</details>
+
+<details>
+<summary><b>How is the model used by the app?</b></summary>
+
+`train_model.py` pickles the model together with its scores, test predictions, feature importances and valid input ranges. The Streamlit app loads that single file, so everything it displays comes from the latest training run.
+</details>
+
+---
+
+<div align="center">
+
+**Submitted by Namita Chhabra · Student ID 2427030677**
+Predictive Analysis — Course Project
+
+*Built with Python · Pandas · NumPy · Matplotlib · scikit-learn · Streamlit*
+
+</div>

@@ -1,5 +1,19 @@
+# macOS / editors
 .DS_Store
-node_modules/
-.env
+.vscode/
+.idea/
+
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Trained model (rebuild with: python train_model.py — the app also builds it on first run)
+model/
+*.pkl
+
 *.log

@@ -4,14 +4,21 @@ Food Waste Prediction System - Multi-Page Web Application
 Features:
 - Centered header title with food prediction symbol (🍲 Food Waste Prediction System).
 - 5 Interactive Sidebar Navigation Views.
+- Builds the dataset and model automatically on first run if they are missing.
 """
 
+import math
 import os
 import pickle
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import streamlit as st
+
+from common import DATASET_PATH, MODEL_PATH, build_features
+from generate_dataset import save_dataset
+from train_model import train
 
 # ---------------------------------------------------------
 # Page Configuration
@@ -31,16 +38,16 @@ st.markdown("""
         background-color: #F4F7F5 !important;
         color: #0F172A !important;
     }
-    
+
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 1.5rem !important;
         max-width: 95% !important;
     }
-    
+
     /* Input Labels: Dark, Bold, High Contrast */
-    [data-testid="stAppViewContainer"] label, 
-    [data-testid="stAppViewContainer"] .stNumberInput label, 
+    [data-testid="stAppViewContainer"] label,
+    [data-testid="stAppViewContainer"] .stNumberInput label,
     [data-testid="stAppViewContainer"] .stSelectbox label,
     [data-testid="stAppViewContainer"] .stRadio label,
     .stWidgetLabel p {
@@ -49,39 +56,39 @@ st.markdown("""
         font-size: 0.92rem !important;
         margin-bottom: 0.2rem !important;
     }
-    
+
     [data-testid="stHorizontalBlock"] {
         gap: 0.8rem !important;
     }
-    
+
     .stNumberInput, .stSelectbox {
         margin-bottom: 0.4rem !important;
     }
-    
+
     /* Dark Mode Sidebar */
     [data-testid="stSidebar"] {
         background-color: #0F172A !important;
         color: #F8FAFC !important;
         border-right: 1px solid #334155 !important;
     }
-    
+
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .stWidgetLabel p,
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3, 
-    [data-testid="stSidebar"] h4, 
-    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4,
+    [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span {
         color: #F8FAFC !important;
     }
-    
+
     [data-testid="stSidebar"] .stAlert {
         background-color: #1E293B !important;
         color: #38BDF8 !important;
         border: 1px solid #334155 !important;
     }
-    
+
     /* Centered Header Title with Food Symbol - No Background Box */
     .header-title-clean {
         font-size: 2.2rem;
@@ -93,7 +100,7 @@ st.markdown("""
         padding: 0;
         background: transparent !important;
     }
-    
+
     /* Result Cards */
     .metric-waste-card {
         background-color: #FFFFFF;
@@ -102,7 +109,7 @@ st.markdown("""
         padding: 0.9rem;
         text-align: center;
     }
-    
+
     .metric-loss-card {
         background-color: #FFFFFF;
         border: 2px solid #DC2626;
@@ -110,7 +117,7 @@ st.markdown("""
         padding: 0.9rem;
         text-align: center;
     }
-    
+
     .stButton>button {
         width: 100%;
         background: linear-gradient(135deg, #16A34A 0%, #15803D 100%);
@@ -124,7 +131,7 @@ st.markdown("""
         margin-top: 0.4rem;
         margin-bottom: 0.6rem;
     }
-    
+
     .stButton>button:hover {
         background: linear-gradient(135deg, #15803D 0%, #166534 100%);
     }
@@ -135,13 +142,13 @@ st.markdown("""
         padding: 0.6rem 0.9rem !important;
         font-weight: 600 !important;
     }
-    
+
     div.stAlert[data-baseweb="notification"] > div:first-child,
     .stAlert p, .stAlert span {
         color: #78350F !important;
         font-weight: 700 !important;
     }
-    
+
     /* Table Styling */
     table, [data-testid="stTable"] table {
         color: #0F172A !important;
@@ -151,7 +158,7 @@ st.markdown("""
         border: 1px solid #CBD5E1 !important;
         margin-top: 0.4rem !important;
     }
-    
+
     th {
         background-color: #E2E8F0 !important;
         color: #0F172A !important;
@@ -160,7 +167,7 @@ st.markdown("""
         padding: 0.5rem 0.8rem !important;
         border: 1px solid #CBD5E1 !important;
     }
-    
+
     td {
         color: #0F172A !important;
         font-weight: 600 !important;
@@ -169,7 +176,7 @@ st.markdown("""
         border: 1px solid #E2E8F0 !important;
         background-color: #FFFFFF !important;
     }
-    
+
     tr:nth-child(even) td {
         background-color: #F8FAFC !important;
     }
@@ -186,21 +193,30 @@ st.markdown("""
 # ---------------------------------------------------------
 # Cache Data & Model Functions
 # ---------------------------------------------------------
-@st.cache_resource
+@st.cache_resource(show_spinner="Preparing dataset and training the model (first run only)...")
 def load_trained_model():
-    model_path = os.path.join("model", "food_waste_model.pkl")
-    if not os.path.exists(model_path):
-        return None
-    with open(model_path, "rb") as f:
-        payload = pickle.load(f)
+    payload = None
+    if os.path.exists(MODEL_PATH):
+        with open(MODEL_PATH, "rb") as f:
+            payload = pickle.load(f)
+    # Missing, or saved by an older version of train_model.py: rebuild it
+    if payload is None or "results" not in payload:
+        if not os.path.exists(DATASET_PATH):
+            save_dataset()
+        payload = train(verbose=False)
     return payload
+
 
 @st.cache_data
 def load_dataset():
-    dataset_path = os.path.join("dataset", "food_waste.csv")
-    if not os.path.exists(dataset_path):
-        return None
-    return pd.read_csv(dataset_path)
+    if not os.path.exists(DATASET_PATH):
+        return save_dataset()
+    return pd.read_csv(DATASET_PATH)
+
+
+def clamp(value, lo, hi):
+    return min(max(value, lo), hi)
+
 
 # ---------------------------------------------------------
 # Main App Layout
@@ -208,21 +224,21 @@ def load_dataset():
 def main():
     # Centered Clean Title Header with Food Symbol
     st.markdown('<h1 class="header-title-clean">🍲 Food Waste Prediction System</h1>', unsafe_allow_html=True)
-    
+
     payload = load_trained_model()
     df = load_dataset()
-    
-    if payload is None:
-        st.error("Model file `model/food_waste_model.pkl` not found! Please run `python train_model.py` first.")
-        st.stop()
-        
+
     model = payload["model"]
     model_name = payload["model_name"]
     feature_names = payload["feature_names"]
     r2_score_val = payload["r2_score"]
+    results = payload["results"]
     categories = payload["categories"]
     days = payload["days"]
-    
+    ranges = payload["input_ranges"]
+    per_customer_ranges = payload["per_customer_ranges"]
+    train_size, test_size = payload["train_size"], payload["test_size"]
+
     currency_config = {
         "India (Rupees - INR)": {"symbol": "INR ", "default_cost_per_kg": 140.0},
         "United States (USD - $)": {"symbol": "$", "default_cost_per_kg": 3.50},
@@ -232,7 +248,7 @@ def main():
         "Canada (CAD - $)": {"symbol": "CAD $", "default_cost_per_kg": 4.80},
         "Australia (AUD - $)": {"symbol": "AUD $", "default_cost_per_kg": 5.20}
     }
-    
+
     # ---------------------------------------------------------
     # DARK MODE SIDEBAR: Navigation, Currency Settings & Model Summary
     # ---------------------------------------------------------
@@ -249,11 +265,11 @@ def main():
             ]
         )
         st.markdown("---")
-        
+
         st.header("Currency Settings")
         selected_country = st.selectbox("Select Country / Currency", options=list(currency_config.keys()))
         curr_info = currency_config[selected_country]
-        
+
         cost_per_kg = st.number_input(
             f"Cost per kg ({curr_info['symbol']})",
             min_value=0.1,
@@ -261,76 +277,85 @@ def main():
             value=curr_info["default_cost_per_kg"],
             step=1.0 if curr_info["symbol"] == "INR " else 0.5
         )
-        
+
         st.markdown("---")
         st.header("Model Summary")
-        st.info(f"Model: {model_name}\n\nAccuracy (R2): {r2_score_val:.4f}")
+        st.info(f"Model: {model_name}\n\nTest R² score: {r2_score_val:.4f}")
+
+        st.markdown("---")
+        st.caption("Predictive Analysis course submission\n\n"
+                   "**Namita Chhabra** · Student ID 2427030677")
 
     # =========================================================
     # VIEW 1: PREDICT FOOD WASTE
     # =========================================================
     if selected_view == "🔮 Predict Food Waste":
         st.subheader("Predict Expected Food Waste & Financial Loss")
-        
+        st.caption("Enter what you know before service starts. Input limits match the range the model was trained on.")
+
+        cust_lo, cust_hi = int(ranges["Number_of_Customers"][0]), int(ranges["Number_of_Customers"][1])
+        prep_lo, prep_hi = math.floor(ranges["Food_Prepared_kg"][0]), math.ceil(ranges["Food_Prepared_kg"][1])
+        prev_hi = math.ceil(ranges["Previous_Food_Waste_kg"][1])
+        temp_lo, temp_hi = math.floor(ranges["Temperature_C"][0]), math.ceil(ranges["Temperature_C"][1])
+
         col1, col2, col3 = st.columns(3)
         with col1:
-            customers = st.number_input("Number of Customers", min_value=1, max_value=2000, value=150, step=5)
+            customers = st.number_input("Number of Customers", min_value=cust_lo, max_value=cust_hi,
+                                        value=clamp(150, cust_lo, cust_hi), step=5)
         with col2:
-            food_prepared = st.number_input("Food Prepared (kg)", min_value=1.0, max_value=2000.0, value=95.0, step=2.5)
+            food_prepared = st.number_input("Food Prepared (kg)", min_value=float(prep_lo), max_value=float(prep_hi),
+                                            value=float(clamp(100, prep_lo, prep_hi)), step=2.5)
         with col3:
-            food_consumed = st.number_input("Food Consumed (kg)", min_value=0.0, max_value=2000.0, value=82.0, step=2.5)
+            category = st.selectbox("Food Category", options=categories)
 
         col4, col5, col6 = st.columns(3)
         with col4:
-            category = st.selectbox("Food Category", options=categories)
-        with col5:
             day_of_week = st.selectbox("Day of Week", options=days)
-        with col6:
+        with col5:
             holiday_event_str = st.selectbox("Holiday / Special Event?", options=["No", "Yes"])
             holiday_event = 1 if holiday_event_str == "Yes" else 0
+        with col6:
+            prev_waste = st.number_input("Previous Food Waste (kg)", min_value=0.0, max_value=float(prev_hi),
+                                         value=float(clamp(15, 0, prev_hi)), step=1.0)
 
-        col7, col8 = st.columns(2)
+        col7, _ = st.columns([1, 2])
         with col7:
-            prev_waste = st.number_input("Previous Food Waste (kg)", min_value=0.0, max_value=500.0, value=12.5, step=1.0)
-        with col8:
-            temp_c = st.number_input("Temperature (C)", min_value=-10.0, max_value=55.0, value=28.0, step=0.5)
+            temp_c = st.number_input("Temperature (C)", min_value=float(temp_lo), max_value=float(temp_hi),
+                                     value=float(clamp(28, temp_lo, temp_hi)), step=0.5)
 
         predict_clicked = st.button("Predict Expected Food Waste & Calculate Financial Loss")
 
         if predict_clicked:
-            if food_consumed > food_prepared:
-                st.warning("Warning: Food Consumed exceeds Food Prepared.")
-                
-            input_data = {
+            per_customer = food_prepared / customers
+            lo, hi = per_customer_ranges[category]
+            if per_customer < lo:
+                st.warning(f"{per_customer:.2f} kg per customer is less than any {category} kitchen in the training data "
+                           f"({lo:.2f}–{hi:.2f} kg). You may run short of food, and this prediction is less reliable.")
+            elif per_customer > hi:
+                st.warning(f"{per_customer:.2f} kg per customer is more than any {category} kitchen in the training data "
+                           f"({lo:.2f}–{hi:.2f} kg). This prediction is less reliable.")
+
+            input_df = pd.DataFrame([{
                 'Number_of_Customers': customers,
                 'Food_Prepared_kg': food_prepared,
-                'Food_Consumed_kg': food_consumed,
+                'Food_Category': category,
+                'Day_of_Week': day_of_week,
                 'Holiday_Event': holiday_event,
                 'Previous_Food_Waste_kg': prev_waste,
-                'Temperature_C': temp_c
-            }
-            
-            for cat in categories:
-                input_data[f'Food_Category_{cat}'] = 1 if category == cat else 0
-                
-            for d in days:
-                input_data[f'Day_of_Week_{d}'] = 1 if day_of_week == d else 0
-                
-            input_df = pd.DataFrame([input_data])
-            for col in feature_names:
-                if col not in input_df.columns:
-                    input_df[col] = 0
-                    
-            input_df = input_df[feature_names]
-            
-            predicted_waste = float(model.predict(input_df)[0])
+                'Temperature_C': temp_c,
+            }])
+            input_X = build_features(input_df)[feature_names]
+
+            predicted_waste = float(model.predict(input_X)[0])
             predicted_waste = max(0.0, round(predicted_waste, 2))
             estimated_loss = round(predicted_waste * cost_per_kg, 2)
-            
+            waste_pct = predicted_waste / food_prepared * 100
+            expected_eaten = max(0.0, food_prepared - predicted_waste)
+
             st.markdown("### Prediction Results & Financial Impact")
-            
+
             res_col1, res_col2, res_col3 = st.columns(3)
-            
+
             with res_col1:
                 st.markdown(f"""
                 <div class="metric-waste-card">
@@ -353,30 +378,34 @@ def main():
 
             with res_col3:
                 st.markdown("#### Recommendation")
-                if predicted_waste < 10.0:
+                suggested_prep = expected_eaten * 1.05  # expected demand plus a 5% safety buffer
+                if waste_pct < 10:
                     st.success("Low Waste Expected: Food preparation is appropriate.")
-                elif 10.0 <= predicted_waste <= 25.0:
-                    st.warning("Medium Waste Expected: Consider slightly reducing preparation.")
+                elif waste_pct <= 20:
+                    st.warning(f"Medium Waste Expected: Consider preparing about {suggested_prep:.0f} kg instead.")
                 else:
-                    st.error("High Waste Expected: Consider reducing preparation and reviewing consumption patterns.")
-                    
-                st.write(f"- Unconsumed Food: {max(0.0, food_prepared - food_consumed):.2f} kg")
-                st.write(f"- Consumption Efficiency: {((food_consumed / food_prepared) * 100):.1f}%")
+                    st.error(f"High Waste Expected: Consider preparing about {suggested_prep:.0f} kg instead "
+                             "and reviewing portion sizes.")
+
+                st.write(f"- Waste as share of food prepared: {waste_pct:.1f}%")
+                st.write(f"- Food prepared per customer: {per_customer:.2f} kg")
 
             # Multi-Country Loss Table
             st.markdown("#### Global Currency Financial Loss Comparison")
+            st.caption("Each country uses a typical local food cost per kg (editable for your own country in the sidebar). "
+                       "These are not exchange-rate conversions.")
             country_loss_data = []
             for country_name, info in currency_config.items():
                 if country_name == selected_country:
                     cntry_loss = estimated_loss
                 else:
                     cntry_loss = round(predicted_waste * info["default_cost_per_kg"], 2)
-                    
+
                 country_loss_data.append({
                     "Country / Region": country_name.split("(")[0].strip(),
                     "Estimated Financial Loss": f"{info['symbol']}{cntry_loss:,.2f}"
                 })
-                
+
             loss_df = pd.DataFrame(country_loss_data)
             st.table(loss_df)
 
@@ -384,16 +413,16 @@ def main():
             st.markdown("#### Quantity Breakdown Chart")
             fig, ax = plt.subplots(figsize=(8, 2.2), facecolor='white')
             ax.set_facecolor('white')
-            
-            bars = ax.barh(['Food Prepared', 'Food Consumed', 'Predicted Waste'], 
-                           [food_prepared, food_consumed, predicted_waste], 
+
+            bars = ax.barh(['Food Prepared', 'Expected Eaten', 'Predicted Waste'],
+                           [food_prepared, expected_eaten, predicted_waste],
                            color=['#0284C7', '#16A34A', '#DC2626'])
             ax.set_xlabel('Weight (kg)', fontsize=9, fontweight='bold', color='#0F172A')
             ax.set_title('Food Weight Comparison (kg)', fontsize=10, fontweight='bold', color='#0F172A')
             ax.tick_params(colors='#0F172A', labelsize=9)
             for bar in bars:
                 width = bar.get_width()
-                ax.text(width + (max(food_prepared, 10)*0.01), bar.get_y() + bar.get_height()/2, 
+                ax.text(width + (max(food_prepared, 10)*0.01), bar.get_y() + bar.get_height()/2,
                         f'{width:.1f} kg', ha='left', va='center', fontweight='bold', fontsize=8.5, color='#0F172A')
             plt.tight_layout()
             st.pyplot(fig)
@@ -403,10 +432,6 @@ def main():
     # =========================================================
     elif selected_view == "📊 EDA Visualizations":
         st.subheader("Exploratory Data Analysis (EDA) - Matplotlib Graphs")
-        
-        if df is None:
-            st.warning("Dataset not found at `dataset/food_waste.csv`!")
-            st.stop()
 
         chart_choice = st.selectbox(
             "Select Visualization:",
@@ -416,12 +441,13 @@ def main():
                 "3. Food Waste by Food Category",
                 "4. Customer Count vs Food Waste",
                 "5. Actual vs Predicted Food Waste",
-                "6. Feature Importance (Random Forest)"
+                "6. Feature Importance"
             ]
         )
-        
+
         if chart_choice == "1. Food Prepared vs Food Consumed":
             st.markdown("#### 1. Food Prepared vs Food Consumed (kg)")
+            st.caption("Food consumed is only known after service, so it is shown here for analysis but is not a model input.")
             fig, ax = plt.subplots(figsize=(9, 4.5), facecolor='white')
             ax.set_facecolor('white')
             ax.scatter(df['Food_Prepared_kg'], df['Food_Consumed_kg'], alpha=0.6, color='#2563EB', edgecolors='none')
@@ -479,13 +505,11 @@ def main():
             st.pyplot(fig)
 
         elif chart_choice == "5. Actual vs Predicted Food Waste":
-            st.markdown("#### 5. Actual vs Predicted Food Waste (Random Forest)")
-            categorical_cols = ['Food_Category', 'Day_of_Week']
-            df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=False)
-            X = df_encoded.drop(columns=['Food_Waste_kg'])
-            y = df_encoded['Food_Waste_kg']
-            y_pred = model.predict(X[feature_names])
-            
+            st.markdown(f"#### 5. Actual vs Predicted Food Waste ({model_name})")
+            st.caption(f"Uses only the {test_size} test rows the model never saw during training.")
+            y = np.array(payload["test_actual"])
+            y_pred = np.array(payload["test_predicted"])
+
             fig, ax = plt.subplots(figsize=(9, 4.5), facecolor='white')
             ax.set_facecolor('white')
             ax.scatter(y, y_pred, alpha=0.6, color='#059669', label='Predicted vs Actual')
@@ -494,28 +518,24 @@ def main():
             ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect Fit (1:1)')
             ax.set_xlabel('Actual Food Waste (kg)', fontweight='bold')
             ax.set_ylabel('Predicted Food Waste (kg)', fontweight='bold')
-            ax.set_title('Actual vs Predicted Food Waste Comparison', fontweight='bold')
+            ax.set_title('Actual vs Predicted Food Waste (Test Data)', fontweight='bold')
             ax.grid(True, linestyle='--', alpha=0.5)
             ax.legend()
             st.pyplot(fig)
 
-        elif chart_choice == "6. Feature Importance (Random Forest)":
-            st.markdown("#### 6. Top Feature Importances (Random Forest)")
-            if hasattr(model, 'feature_importances_'):
-                importances = model.feature_importances_
-                indices = np.argsort(importances)[::-1][:10]
-                sorted_features = [feature_names[i] for i in indices][::-1]
-                sorted_importances = importances[indices][::-1]
-                
-                fig, ax = plt.subplots(figsize=(9, 4.5), facecolor='white')
-                ax.set_facecolor('white')
-                ax.barh(sorted_features, sorted_importances, color='#EC4899', edgecolor='black', alpha=0.85)
-                ax.set_xlabel('Relative Importance', fontweight='bold')
-                ax.set_title('Top 10 Feature Importances', fontweight='bold')
-                ax.grid(axis='x', linestyle='--', alpha=0.5)
-                st.pyplot(fig)
-            else:
-                st.info("Feature importance is available for Random Forest Regressor.")
+        elif chart_choice == "6. Feature Importance":
+            st.markdown(f"#### 6. Top Feature Importances ({model_name})")
+            st.caption("How many extra kg of average error the model makes when each input is shuffled "
+                       "(permutation importance on test data). Bigger = more important.")
+            importance = pd.Series(payload["feature_importance"]).sort_values(ascending=False).head(10)[::-1]
+
+            fig, ax = plt.subplots(figsize=(9, 4.5), facecolor='white')
+            ax.set_facecolor('white')
+            ax.barh(importance.index, importance.values, color='#EC4899', edgecolor='black', alpha=0.85)
+            ax.set_xlabel('Extra error when shuffled (kg)', fontweight='bold')
+            ax.set_title('Top 10 Feature Importances', fontweight='bold')
+            ax.grid(axis='x', linestyle='--', alpha=0.5)
+            st.pyplot(fig)
 
     # =========================================================
     # VIEW 3: DATASET EXPLORER
@@ -523,22 +543,18 @@ def main():
     elif selected_view == "📋 Dataset Explorer":
         st.subheader("Dataset Explorer")
         st.caption("Note: This dataset is synthetic (artificially generated for educational and demonstration purposes).")
-        
-        if df is None:
-            st.warning("Dataset file `dataset/food_waste.csv` not found!")
-            st.stop()
 
         col_d1, col_d2, col_d3 = st.columns(3)
         col_d1.metric("Total Records", f"{df.shape[0]}")
         col_d2.metric("Total Features", f"{df.shape[1]}")
         col_d3.metric("Missing Values", f"{df.isnull().sum().sum()}")
-        
+
         st.markdown("#### Dataset Preview (First 100 Rows)")
         st.dataframe(df.head(100), use_container_width=True)
-        
+
         st.markdown("#### Summary Statistics (`df.describe()`)")
         st.dataframe(df.describe().T, use_container_width=True)
-        
+
         st.markdown("#### Dataset Structure & Info")
         info_df = pd.DataFrame({
             "Column Name": df.columns,
@@ -553,41 +569,50 @@ def main():
     # =========================================================
     elif selected_view == "🎯 Model Comparison (R²)":
         st.subheader("Machine Learning Regressors Comparison")
-        
-        st.markdown("""
-        All three models were trained on 80% of the synthetic food waste data (800 samples) 
-        and evaluated on 20% unseen testing data (200 samples) using the **R² Score** (Coefficient of Determination):
+
+        total = train_size + test_size
+        st.markdown(f"""
+        All three models were trained on {train_size / total:.0%} of the synthetic food waste data ({train_size} samples)
+        and evaluated on the remaining {test_size / total:.0%} ({test_size} unseen samples) using the **R² Score**
+        (Coefficient of Determination), RMSE and MAE. These numbers come straight from the last run of `train_model.py`.
         """)
-        
-        comparison_data = [
-            {"Model": "Linear Regression", "Test R2 Score": 0.9964, "Status": "Evaluated"},
-            {"Model": "Decision Tree Regressor", "Test R2 Score": 0.9044, "Status": "Evaluated"},
-            {"Model": "Random Forest Regressor", "Test R2 Score": 0.9551, "Status": "Saved & Deployed Model"}
-        ]
-        comp_df = pd.DataFrame(comparison_data)
+
+        comp_df = pd.DataFrame([
+            {
+                "Model": name,
+                "Test R² Score": round(m["R2_Score"], 4),
+                "RMSE (kg)": round(m["RMSE"], 2),
+                "MAE (kg)": round(m["MAE"], 2),
+                "Status": "Saved & Deployed Model" if name == model_name else "Evaluated",
+            }
+            for name, m in results.items()
+        ])
         st.table(comp_df)
-        
+
         st.markdown("#### R² Score Comparison Bar Chart")
         fig, ax = plt.subplots(figsize=(8, 3.2), facecolor='white')
         ax.set_facecolor('white')
-        bars = ax.bar(comp_df['Model'], comp_df['Test R2 Score'], color=['#3B82F6', '#8B5CF6', '#16A34A'], edgecolor='black')
-        ax.set_ylim(0.8, 1.02)
-        ax.set_ylabel('Test R2 Score', fontweight='bold')
-        ax.set_title('Regressors Test R2 Score Comparison', fontweight='bold')
+        colors = ['#16A34A' if name == model_name else '#94A3B8' for name in comp_df['Model']]
+        bars = ax.bar(comp_df['Model'], comp_df['Test R² Score'], color=colors, edgecolor='black')
+        ax.set_ylim(max(0.0, comp_df['Test R² Score'].min() - 0.1), 1.02)
+        ax.set_ylabel('Test R² Score', fontweight='bold')
+        ax.set_title('Regressors Test R² Score Comparison', fontweight='bold')
         for bar in bars:
             yval = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.008, f'{yval:.4f}', ha='center', va='bottom', fontweight='bold')
         ax.grid(axis='y', linestyle='--', alpha=0.5)
         st.pyplot(fig)
-        
-        st.info("**Why Random Forest is saved**: Linear Regression suffers from extreme multicollinearity when inputs like Customer Count and Food Prepared are correlated. Random Forest handles non-linear decision trees robustly without generating wild negative predictions.")
+
+        st.info(f"**Why {model_name} is saved**: it had the highest R² score on the test data, so it is picked "
+                "automatically by `train_model.py`. Food Consumed is not used as an input because it is only known "
+                "after service; including it would make the scores look better than any real forecast could be.")
 
     # =========================================================
     # VIEW 5: JUPYTER NOTEBOOK & VS CODE GUIDE
     # =========================================================
     elif selected_view == "📓 Jupyter Notebook & VS Code Guide":
         st.subheader("Jupyter Notebook & VS Code Setup Guide")
-        
+
         st.markdown("""
         ### VS Code Execution Steps:
         1. **Open VS Code** in the project folder.
@@ -604,36 +629,46 @@ def main():
            ```bash
            python train_model.py
            ```
-        6. **Run Streamlit Web App**:
+        6. **Run Sanity Checks** (optional):
+           ```bash
+           python test_prediction.py
+           ```
+        7. **Run Streamlit Web App**:
            ```bash
            streamlit run app.py
            ```
+        Steps 4 and 5 are optional: the app builds the dataset and model itself on first run if they are missing.
+
+        **Notebook:** `python build_notebook.py` writes `notebooks/food_waste_analysis.ipynb`.
         """)
-        
+
         st.markdown("---")
         st.markdown("### Technical Interview Q&A Guide")
-        
-        st.markdown("""
+
+        st.markdown(f"""
         **1. What problem does this system solve?**
         > *This system predicts food waste in kilograms for commercial kitchens before daily operations begin, helping kitchen managers optimize food preparation and reduce monetary losses.*
 
         **2. Why were these specific features selected?**
-        > *Features represent operational scale (customers), physical quantity (prepared vs consumed), dining style (buffet vs fine dining), weather impact (temperature), and historical trends.*
+        > *They are all known before service starts: operational scale (customers), quantity prepared, dining style (buffet vs fine dining), day and holiday, weather (temperature), and last service's waste. A "customers × category" feature lets the model learn a different portion size for each service type.*
 
-        **3. Why is Random Forest preferred for real-world predictions?**
-        > *Linear Regression suffers from extreme multicollinearity when inputs like Customer Count and Food Prepared are correlated, resulting in negative predictions. Random Forest averages multiple decision trees (bagging), capturing complex non-linear patterns reliably across all input ranges.*
+        **3. Why isn't Food Consumed an input?**
+        > *It is only measured after service, and waste is roughly prepared minus consumed. Using it would leak the answer into the inputs and give an unrealistically high score.*
 
-        **4. What does Exploratory Data Analysis (EDA) mean?**
+        **4. Which model is used and why?**
+        > *{model_name}, because it scored the highest R² on unseen test data ({r2_score_val:.4f}). `train_model.py` compares Linear Regression, Decision Tree and Random Forest and keeps the best automatically.*
+
+        **5. What does Exploratory Data Analysis (EDA) mean?**
         > *EDA is the process of examining and visualizing data before modeling to understand distributions, detect anomalies, check for missing values or duplicates, and discover key relationships.*
 
-        **5. What does R² Score mean?**
-        > *The R² Score measures how well the regression model explains target variance. An R² of 0.9551 means 95.51% of food waste variance is explained by our input features.*
+        **6. What does R² Score mean?**
+        > *The R² Score measures how well the regression model explains target variance. An R² of {r2_score_val:.4f} means about {r2_score_val:.0%} of the variation in food waste is explained by the input features.*
 
-        **6. How is Streamlit used in this project?**
+        **7. How is Streamlit used in this project?**
         > *Streamlit converts Python scripts into an interactive user interface, rendering input controls, model predictions, tables, and Matplotlib charts directly in the web browser.*
 
-        **7. How is Pickle used in this project?**
-        > *Pickle serializes the trained model into `model/food_waste_model.pkl`. Streamlit loads this file into memory instantly to make real-time predictions without retraining.*
+        **8. How is Pickle used in this project?**
+        > *Pickle saves the trained model and its test scores into `model/food_waste_model.pkl`. Streamlit loads this file to make real-time predictions without retraining.*
         """)
 
 if __name__ == "__main__":
