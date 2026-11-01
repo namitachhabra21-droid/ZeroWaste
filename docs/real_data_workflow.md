@@ -45,8 +45,7 @@ Choose **Forecast waste**, pick a kitchen and date, then press **Predict next-da
 For an example, use **Copenhagen / Axel** and **2018-11-22**. This uses recorded history through the previous day.
 The **Training results** section shows metrics from the selected saved artifact, not hard-coded scores.
 If both notebook and CLI artifacts exist, **Training run** lets you choose. Saving the notebook artifact again updates the app on its next rerun/refresh.
-Missing artifacts prompt you to complete the notebook's save step; the real-data app does not silently train a synthetic model.
-**Synthetic demonstration** retains the original preparation and currency interface, explicitly labelled as simulated data.
+Missing artifacts prompt you to complete the notebook's save step; the app does not train a model silently.
 
 ## Outputs
 
@@ -89,4 +88,4 @@ The evaluation simulates daily predictions with newly observed prior-day waste b
 It does not simulate forecasting many days ahead without new measurements. Kitchens unseen at fit time are excluded from scoring and rejected by inference.
 Results concern covered 2018 services, not current operations or unseen locations. Missing target rows are excluded from scoring, not imputed.
 
-The original synthetic training code and dataset are preserved. `app.py` now routes to real-data views by default.
+The app shows the real-data views only. The earlier synthetic demo was removed from this project.
