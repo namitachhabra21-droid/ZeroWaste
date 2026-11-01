@@ -47,6 +47,14 @@
 
 ## ⚡ At a Glance
 
+**Real-data experiment:** a separate pipeline now trains and compares forecasts on
+the [URBAN-WASTE hotel/restaurant records](https://zenodo.org/records/3355300).
+See [real-data setup](docs/real_data_workflow.md) and [measured evaluation results](docs/real_model/results.md).
+The Streamlit dashboard now opens **Real kitchen data** by default and loads the saved Jupyter
+forecast when available. It provides next-day forecasts, validation/test comparisons and a dataset explorer.
+The original preparation/currency demo is available under **Synthetic demonstration**;
+the figures and scores below describe that original synthetic experiment.
+
 | | |
 | :--- | :--- |
 | **Task** | Supervised regression: predict `Food_Waste_kg` for a single service |

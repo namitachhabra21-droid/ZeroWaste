@@ -225,6 +225,13 @@ def main():
     # Centered Clean Title Header with Food Symbol
     st.markdown('<h1 class="header-title-clean">🍲 Food Waste Prediction System</h1>', unsafe_allow_html=True)
 
+    data_mode = st.sidebar.selectbox("Data mode", ["Real kitchen data", "Synthetic demonstration"])
+    if data_mode == "Real kitchen data":
+        from real_app import render_real_app
+        render_real_app()
+        return
+
+    st.warning("Synthetic demonstration: predictions and scores below come from simulated kitchen services.")
     payload = load_trained_model()
     df = load_dataset()
 
