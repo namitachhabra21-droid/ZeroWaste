@@ -24,6 +24,14 @@
 
 ---
 
+## 🌐 Live Demo
+
+**[Open the dashboard](https://zerowaste-4shrcvvdzgxdd3dl5544xs.streamlit.app/)**
+
+The app is hosted on Streamlit Community Cloud and deploys from the `main` branch.
+
+---
+
 ## ⚡ At a Glance
 
 | | |
