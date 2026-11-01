@@ -1,0 +1,89 @@
+{
+  "source": "https://zenodo.org/records/3355300",
+  "source_sha256": "a4f8a79179595064c5d1237fa7f1a63378dd2a2de625b82d26f5a763a7ee108c",
+  "unit": "source weight units (exact CSV unit unconfirmed)",
+  "raw_rows": 3321,
+  "measured_targets": 3160,
+  "eligible_next_day_rows": 2678,
+  "split": {
+    "train": {
+      "start": "2018-03-07",
+      "end": "2018-08-09",
+      "rows": 1249,
+      "kitchens": 27
+    },
+    "validation": {
+      "start": "2018-08-10",
+      "end": "2018-09-30",
+      "rows": 729,
+      "kitchens": 22
+    },
+    "test": {
+      "start": "2018-10-01",
+      "end": "2018-11-21",
+      "rows": 700,
+      "kitchens": 24
+    }
+  },
+  "validation_scored_rows": 729,
+  "test_scored_rows": 669,
+  "validation_unseen_kitchen_rows_excluded": 0,
+  "test_unseen_kitchen_rows_excluded": 31,
+  "selection": "lowest validation MAE among three baselines and three fixed ML candidates",
+  "selected_name": "Recent 7 observations mean",
+  "validation_results": {
+    "Previous day": {
+      "MAE": 15.458573388203018,
+      "RMSE": 25.789162290240704,
+      "R2": 0.6418424308731229
+    },
+    "Recent 7 observations mean": {
+      "MAE": 12.58198726239467,
+      "RMSE": 20.430260557871037,
+      "R2": 0.7752252753518785
+    },
+    "Historical mean": {
+      "MAE": 14.7743584286571,
+      "RMSE": 22.83351022708582,
+      "R2": 0.7192336694629782
+    },
+    "Ridge Regression": {
+      "MAE": 12.650014153853494,
+      "RMSE": 20.060314435045004,
+      "R2": 0.7832919044309088
+    },
+    "Decision Tree": {
+      "MAE": 15.46080801269944,
+      "RMSE": 24.522564444553336,
+      "R2": 0.6761592978546102
+    },
+    "Random Forest": {
+      "MAE": 13.14073850041126,
+      "RMSE": 20.746289862286908,
+      "R2": 0.7682175515043236
+    }
+  },
+  "test_results": {
+    "Previous day": {
+      "MAE": 13.273243647234677,
+      "RMSE": 21.431382490541864,
+      "R2": 0.6493893947732525
+    },
+    "Recent 7 observations mean": {
+      "MAE": 10.987892376681614,
+      "RMSE": 17.603632333353914,
+      "R2": 0.763446568405507
+    },
+    "Historical mean": {
+      "MAE": 15.564341815473586,
+      "RMSE": 22.58976549581891,
+      "R2": 0.6104635348859736
+    }
+  },
+  "versions": {
+    "python": "3.13.17",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "scikit_learn": "1.9.1"
+  }
+}
