@@ -28,7 +28,7 @@ To download it again, use the CSV download on the linked Zenodo page and retain 
 
 Open `notebooks/real_food_waste_training.ipynb` in VS Code and select the project's `.venv` Python environment as the kernel.
 Run the cells from top to bottom with Shift+Enter. Step 5 contains the actual `.fit()` calls for all three ML models.
-This notebook is supplied unexecuted so you can train it yourself. `python build_real_notebook.py` regenerates it and clears any saved outputs.
+The notebook includes saved execution outputs so tables, charts and the example prediction are visible when it opens. You can rerun the cells to reproduce them. `python build_real_notebook.py` regenerates an unexecuted copy and clears saved outputs; rerun and save the notebook afterwards to restore them.
 For the standalone Jupyter web interface, install `jupyterlab` in the environment and run `python -m jupyter lab`.
 
 The notebook saves its own artifacts to `model/real_notebook_model.pkl` and `model/real_notebook_metrics.json`.
@@ -57,7 +57,7 @@ Missing artifacts prompt you to complete the notebook's save step; the app does 
 - `docs/real_model/per_kitchen.csv`: selected-method and previous-day errors by kitchen.
 
 Models: Ridge Regression, Decision Tree, Random Forest. Baselines: previous calendar day, mean of the last seven measured observations, historical kitchen mean.
-The lowest validation MAE determines the selected method, including baselines. A baseline can win; do not describe it as a trained ML model.
+Selection uses lowest validation MAE among trained ML candidates, selecting Ridge Regression for the course requirement. The seven-observation mean has slightly lower validation MAE and remains a benchmark. The holdout was inspected previously and is not a fresh untouched test in this revision.
 The final holdout does not determine model selection. No hyperparameter search is performed.
 
 ## Forecast one day

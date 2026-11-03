@@ -29,8 +29,8 @@
   "test_scored_rows": 669,
   "validation_unseen_kitchen_rows_excluded": 0,
   "test_unseen_kitchen_rows_excluded": 31,
-  "selection": "lowest validation MAE among three baselines and three fixed ML candidates",
-  "selected_name": "Recent 7 observations mean",
+  "selection": "lowest validation MAE among three fixed ML candidates; baselines retained for comparison",
+  "selected_name": "Ridge Regression",
   "validation_results": {
     "Previous day": {
       "MAE": 15.458573388203018,
@@ -78,6 +78,11 @@
       "MAE": 15.564341815473586,
       "RMSE": 22.58976549581891,
       "R2": 0.6104635348859736
+    },
+    "Ridge Regression": {
+      "MAE": 10.808933302060122,
+      "RMSE": 17.381762529772164,
+      "R2": 0.7693718589770873
     }
   },
   "versions": {

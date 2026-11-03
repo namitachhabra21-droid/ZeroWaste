@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from predict_real_waste import forecast
-from real_data import MIN_HISTORY, MODEL_PATH, RAW_PATH, ROOT, TARGET, load_clean_data
+from real_data import FEATURES, features_from_history, MIN_HISTORY, MODEL_PATH, RAW_PATH, ROOT, TARGET, load_clean_data
 
 SELECTED_COLOR = "#0D6E65"
 BASELINE_COLOR = "#8A9A96"
@@ -23,6 +23,7 @@ BASELINE_NAMES = {"Previous day", "Recent 7 observations mean", "Historical mean
 
 @st.cache_resource
 def load_forecaster(path, revision):
+    """Load a fitted pipeline and its metrics; this function does not train models."""
     # revision changes when a notebook run replaces its saved artifact.
     with open(path, "rb") as f:
         payload = pickle.load(f)
@@ -85,8 +86,11 @@ def card(title, body):
 
 
 def render_real_app():
+    """Load a saved training run and route the sidebar selection to its view."""
     st.markdown(CARD_CSS, unsafe_allow_html=True)
     st.caption("Real hotel and restaurant records · URBAN-WASTE · historical next-day forecasting")
+    # The notebook and training script save separate artifacts. Prefer the notebook
+    # when both exist; the sidebar can switch between the saved training runs.
     artifacts = {
         label: path for label, path in [
             ("Jupyter notebook", ROOT / "model/real_notebook_model.pkl"),
@@ -146,7 +150,7 @@ def render_overview(payload, clean):
     st.success(
         f"**Method used: {selected}.** On {metrics.get('test_scored_rows', metrics.get('test_rows'))} "
         f"unseen test records it had {improvement:.1f}% lower average error than the previous-day baseline. "
-        "It was chosen by validation error, where the simple average beat the learned models."
+        "It has the lowest validation MAE among trained ML candidates. The moving-average baseline had slightly lower validation MAE and remains a benchmark."
     )
 
     mae_text = f"Typical error about {test['MAE']:.1f} units. That is {improvement:.0f}% better than repeating yesterday's value."
@@ -207,6 +211,8 @@ def method_chart(metrics, selected, include_learned):
         rows.append({"Method": name, "MAE": s["MAE"], "Role": "Selected method" if name == selected else "Baseline (not selected)"})
     if posthoc:
         for name, s in posthoc["test_results"].items():
+            if name in metrics["test_results"]:
+                continue
             rows.append({"Method": name, "MAE": s["MAE"], "Role": "Learned model (not selected)"})
     df = pd.DataFrame(rows)
     # Click a legend entry to highlight that group; click again to clear.
@@ -282,8 +288,12 @@ def render_explanation(payload, clean, kitchen, date, result):
     st.markdown("#### How this number was made")
     window = forecast_window(clean, kitchen, date)
     if result["selected_model"] != "Recent 7 observations mean" or window.empty:
-        st.info("This method learns from several features at once, so there is no simple recipe to show. "
-                "See Training results for how accurate it was on unseen data.")
+        st.write("The fitted model combines past waste, kitchen identity and calendar features using weights learned during training.")
+        past = clean.loc[(clean.kitchen == kitchen) & (clean.date < pd.Timestamp(date))].dropna(subset=[TARGET]).sort_values("date")
+        history = list(past[["date", TARGET]].itertuples(index=False, name=None))
+        features = features_from_history(kitchen, date, history)
+        st.dataframe(pd.DataFrame([features])[FEATURES], hide_index=True, width="stretch")
+        st.caption("lag_1/2/3: last three measurements; mean_3/7 and std_7: recent averages and variation; historical_mean/count: earlier history; calendar sin/cos: weekday and month.")
         return
     values = window[TARGET].to_list()
     total = sum(values)
@@ -327,7 +337,11 @@ def render_explanation(payload, clean, kitchen, date, result):
 
 @st.fragment
 def what_if(payload, clean, kitchen, date):
-    """Edit the measured values the forecast uses; only this section reruns."""
+    """Offer an arithmetic what-if editor only for the moving-average baseline.
+
+    The editor is hidden for Ridge, whose prediction combines multiple features.
+    Streamlit reruns only this fragment when its editable table changes.
+    """
     if payload["selected_name"] != "Recent 7 observations mean":
         return
     window = forecast_window(clean, kitchen, date)
@@ -356,8 +370,16 @@ def what_if(payload, clean, kitchen, date):
 
 
 def render_forecast(payload, clean):
+    """Collect a known kitchen and date, derive inputs, and display one forecast.
+
+    Historical waste is already loaded from the supplied dataset. This view is not
+    a data-upload workflow for new restaurants, nor a live present-day data feed.
+    """
     st.subheader("Forecast next-day food waste")
-    st.caption("Pick a kitchen and a date to see the forecast from that kitchen's earlier measurements.")
+    st.markdown(f"**Past waste measurements → {payload['selected_name']} → predicted next-day waste**")
+    st.write("A restaurant supplies dated records of its measured food waste and its kitchen ID. In this demo those records are already loaded: choose a kitchen and the date you want to predict.")
+    st.info("Required history: at least 3 earlier waste measurements, including the day immediately before the forecast. The model automatically calculates previous waste values, recent averages, variation and calendar features. Output: one predicted waste value for the selected kitchen and date, in source weight units.")
+    st.caption("This dashboard uses the supplied historical dataset; it does not currently collect or upload a new restaurant's daily records. Present-day use needs updated records and evaluation.")
     known = sorted(set(payload["known_kitchens"]) & set(clean.kitchen))
     if not known:
         st.warning("No kitchens from the saved training run are present in this dataset.")
@@ -387,6 +409,8 @@ def render_forecast(payload, clean):
     st.caption("Shows the last 30 recorded rows. Missing measurements are not treated as zero.")
     if submitted:
         try:
+            # Call the shared inference function used by the command-line tool.
+            # It rebuilds historical features and applies the saved fitted pipeline.
             result = forecast(payload, clean, kitchen, date)
         except ValueError as exc:
             st.warning(str(exc))
@@ -400,6 +424,7 @@ def render_forecast(payload, clean):
 
 
 def render_results(payload):
+    """Display validation comparisons and test scores belonging to the saved run."""
     st.subheader("Training and test results")
     metrics = payload["metrics"]
     selected = payload["selected_name"]
@@ -411,7 +436,8 @@ def render_results(payload):
     st.caption("R² describes explained variation, not the percentage of correct predictions. MAE is the average absolute prediction error.")
 
     st.markdown("#### Step 1 · Selection on validation data")
-    st.success(f"Selected by lowest validation MAE: **{selected}**. Validation data was used to choose; test data was not.")
+    st.success(f"Selected by lowest validation MAE among trained ML candidates: **{selected}**. Validation data was used to choose; test data was not.")
+    st.caption("We select a trained ML model for the course requirement. The seven-observation average has slightly lower validation MAE. This holdout was inspected in the earlier experiment and is not a fresh untouched test.")
     comparison = pd.DataFrame(metrics["validation_results"]).T.sort_values("MAE")
     comparison.index.name = "Method"
     st.dataframe(comparison, width="stretch")
@@ -439,12 +465,7 @@ def render_results(payload):
         rows_table = pd.DataFrame(posthoc["test_results"]).T[["MAE", "RMSE", "R2"]]
         rows_table.index.name = "Model"
         st.table(rows_table.round(3))
-        best = rows_table["MAE"].idxmin()
-        st.caption(
-            f"On the test set {best} had a lower MAE than the selected method. "
-            "It was not chosen because the selection rule used validation data, which the model did not win on. "
-            "Reporting it here shows the comparison, not a change of method."
-        )
+        st.caption("Additional test comparisons do not determine selection. Ridge Regression is selected by lowest validation MAE among trained ML candidates.")
     else:
         st.info("Post-hoc comparison not generated yet. Run `python posthoc_comparison.py`.")
     st.link_button("Dataset source", metrics.get("source", "https://zenodo.org/records/3355300"))
@@ -474,8 +495,8 @@ def render_how_it_works():
     4. The saved method estimates the next day's recorded waste.
 
     Ridge Regression, Decision Tree and Random Forest were compared with simple baselines.
-    The method with the lowest validation MAE was selected before final testing.
-    A recent-observations average is a baseline, rather than a trained ML regressor.
+    Ridge Regression has the lowest validation MAE among trained ML candidates and is the main predictor. The moving-average baseline has slightly lower validation MAE. The existing holdout was inspected in the earlier experiment.
+    The comparison seven-observation moving average is a simple time-series forecasting method. It does not fit regression coefficients and is different from the MA component in ARIMA.
 
     Testing simulates daily operation: each day's actual measurement becomes available for the following days.
     These results do not establish reliability for unseen kitchens or current operations.

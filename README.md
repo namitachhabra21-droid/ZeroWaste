@@ -38,11 +38,11 @@ The app is hosted on Streamlit Community Cloud and deploys from the `main` branc
 | :--- | :--- |
 | **Task** | Next-day forecast of recorded food waste for each kitchen |
 | **Data** | [URBAN-WASTE](https://zenodo.org/records/3355300) hotel and restaurant records · 3,321 raw rows · 34 kitchens · 2018 |
-| **Method used** | **Recent 7 observations mean**: the average of a kitchen's last seven measured waste values |
-| **Why this method** | It had the lowest **validation** error among the candidates, so it was chosen before the final test |
-| **Test result** | MAE **10.99**, RMSE 17.60, R² **0.763** on 669 unseen rows |
-| **vs previous-day baseline** | **17.2%** lower average error (MAE 13.27 → 10.99) |
-| **Deliverable** | Streamlit dashboard with an overview, step-by-step forecasts, what-if editing, training results and a dataset explorer |
+| **Method used** | **Ridge Regression**: a trained linear model with L2 regularization |
+| **Why this method** | Lowest **validation** MAE among trained ML candidates; baselines retained for comparison |
+| **Test result** | MAE **10.81**, RMSE 17.38, R² **0.769** on 669 unseen rows |
+| **vs previous-day baseline** | **18.6%** lower average error (MAE 13.27 → 10.81) |
+| **Deliverable** | Streamlit dashboard with an overview, forecasts with model inputs, training results and a dataset explorer |
 
 ---
 
@@ -53,6 +53,14 @@ Kitchens prepare food before they know how many people will come. Preparing too 
 > Given a kitchen's recent measured waste, how much will it waste tomorrow?
 
 The answer is a number in source weight units. The export's exact unit is not confirmed, so the results are shown in those units rather than in kilograms.
+
+---
+
+## Restaurant inputs and prediction output
+
+The demo already contains dated kitchen waste measurements. Select a known kitchen and forecast date. At least three earlier measurements are required, including one from the previous calendar day. Ridge Regression uses kitchen identity, the last three waste measurements, recent means and variation, historical mean and measurement count, and weekday/month features calculated automatically from earlier records.
+
+The output is one predicted next-day waste value in source weight units. The seven-observation moving average is retained as a forecasting baseline. The dashboard has no new-restaurant upload form; present-day use requires updated history and evaluation.
 
 ---
 
@@ -83,40 +91,41 @@ Future records never leak into training. Test rows from kitchens unseen during f
 
 | Candidate | Validation MAE | Validation R² |
 | :--- | ---: | ---: |
-| **Recent 7 observations mean (selected)** | **12.58** | 0.775 |
-| Ridge Regression | 12.65 | 0.783 |
+| Recent 7 observations mean (baseline) | **12.58** | 0.775 |
+| **Ridge Regression (selected ML)** | **12.65** | 0.783 |
 | Random Forest | 13.14 | 0.768 |
 | Historical mean | 14.77 | 0.719 |
 | Previous day | 15.46 | 0.642 |
 | Decision Tree | 15.46 | 0.676 |
 
-The method with the lowest validation MAE is chosen. Baselines are allowed to win, and the simple average did.
+For the course requirement, selection uses lowest validation MAE among trained ML candidates, selecting Ridge. The moving-average baseline has slightly lower validation MAE (12.58 vs 12.65). The holdout was inspected in the earlier experiment and is not a fresh untouched test in this revision.
 
 ### 3. Evaluate once on the holdout
 
-The chosen method is scored on the test period after the choice is frozen. Evaluation is rolling next-day: earlier test-day actuals become available for later test-day forecasts, as they would in daily operation.
+The selected ML model is evaluated on the existing holdout; selection uses validation MAE. Evaluation is rolling next-day: earlier test-day actuals become available for later test-day forecasts, as they would in daily operation.
 
 | Test (669 rows) | MAE | RMSE | R² |
 | :--- | ---: | ---: | ---: |
-| **Recent 7 observations mean (selected)** | **10.99** | **17.60** | **0.763** |
+| **Ridge Regression (selected)** | **10.81** | **17.38** | **0.769** |
+| Recent 7 observations mean (baseline) | 10.99 | 17.60 | 0.763 |
 | Previous day | 13.27 | 21.43 | 0.649 |
 | Historical mean | 15.56 | 22.59 | 0.610 |
 
 ### 4. Other models, for comparison only
 
-Ridge, Decision Tree and Random Forest were also trained and tested after selection. They are reported in [`docs/real_model/posthoc_test_results.json`](docs/real_model/posthoc_test_results.json) and labelled as not used for selection.
+The additional test comparison includes Ridge (the selected reference), Decision Tree and Random Forest. They are reported in [`docs/real_model/posthoc_test_results.json`](docs/real_model/posthoc_test_results.json) and labelled as not used for selection.
 
-| Model (post-hoc, not selected) | Test MAE | Test R² |
+| Model (test comparison) | Test MAE | Test R² |
 | :--- | ---: | ---: |
 | Ridge Regression | 10.81 | 0.769 |
 | Random Forest | 11.66 | 0.741 |
 | Decision Tree | 12.35 | 0.696 |
 
-Ridge scored slightly better on the test set, but selection used validation data, so the selected method stays as it is.
+Ridge is selected by validation MAE among trained ML models, rather than by test scores.
 
 ### What "Recent 7 observations mean" means
 
-For a kitchen on day *D*, the forecast is the average of its last seven measured values before *D*. It is a baseline rule rather than a fitted regression. The dashboard shows each step of the calculation for any forecast.
+This comparison baseline averages a kitchen's last seven measured values before the forecast date. It is a simple time-series forecasting method. The main predictor is Ridge Regression.
 
 ---
 
@@ -129,7 +138,7 @@ streamlit run app.py
 | View | What it shows |
 | :--- | :--- |
 | **Overview** | Verdict, key numbers, method comparison, predicted vs recorded timeline, error histogram, and per-kitchen improvement |
-| **Forecast waste** | Pick a kitchen and date. See the forecast, the step-by-step calculation, a likely range, and a what-if editor |
+| **Forecast waste** | Pick a kitchen and date. See the required records, Ridge forecast and model inputs |
 | **Training results** | Validation and test tables, the selection step, predicted vs recorded scatter, and post-hoc models |
 | **Dataset explorer** | Records by date range and kitchen, with the raw table and a CSV download |
 | **How it works** | Plain-language description of the method and its limits |

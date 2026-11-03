@@ -18,12 +18,15 @@ OUTPUT = ROOT / "docs/real_model/posthoc_test_results.json"
 
 
 def run():
+    """Score the fixed candidate pipelines on the existing shared holdout."""
     clean = load_clean_data()
     rows = build_forecast_rows(clean).dropna(subset=[TARGET])
     training, validation_all, test_all = chronological_split(rows)
     fit_rows = pd.concat([training, validation_all], ignore_index=True)
     test = test_all[test_all.kitchen.isin(fit_rows.kitchen.unique())].copy()
     results = {}
+    # These extra test scores are descriptive comparisons, not a selection rule.
+    # All candidates use the same train + validation fit and eligible test records.
     for name, model in candidates().items():
         fitted = clone(model).fit(fit_rows[FEATURES], fit_rows[TARGET])
         results[name] = scores(test[TARGET], np.maximum(0, fitted.predict(test[FEATURES])))

@@ -17,27 +17,35 @@ def create_notebook():
                       "source": dedent(text).strip().splitlines(keepends=True)})
 
     markdown("""
-    # ZeroWaste — Train on real kitchen records in Jupyter
+    # ZeroWaste — Food Waste Forecasting with Ridge Regression
 
-    Is notebook mein tum khud cells run karke models train karogi. Training ka actual
-    `.fit()` call Step 5 mein hai. Notebook open karne se training automatically nahi hoti.
+    This notebook prepares real kitchen records, trains regression models, evaluates
+    next-day predictions and saves a fitted model for the dashboard. Run the cells in
+    order; opening the notebook alone does not train a model.
 
-    **Data:** [URBAN-WASTE Food Tracking Device](https://zenodo.org/records/3355300),
-    Mattias Eriksson and Samuel Lindgren (2019), recorded at pilot hotels/restaurants.
-    **Task:** known kitchen ka next-day waste, uski measured past history se predict karna.
+    **Data source:** [URBAN-WASTE Food Tracking Device](https://zenodo.org/records/3355300),
+    Mattias Eriksson and Samuel Lindgren (2019), containing hotel and restaurant records
+    from 2018. **Prediction task:** estimate the next day's recorded waste for a kitchen
+    represented during fitting, using only its earlier measured waste and calendar features.
 
-    CSV ki exact weight unit explicitly documented nahi hai. Outputs ko **source weight units**
-    kehna; abhi kg, rupees ya preparation recommendation claim mat karna.
+    **Main model:** Ridge Regression, selected by validation MAE among the three trained
+    ML candidates. The seven-observation moving average remains a comparison baseline.
+    The exported CSV does not explicitly confirm its weight unit, so predictions are
+    reported in **source weight units**, not labelled as kilograms or converted to money.
 
-    **Setup:** project terminal mein `.venv/bin/python -m pip install -r requirements-notebook.txt`.
-    VS Code mein notebook kholo → **Select Kernel → Python Environments → .venv**.
-    Cells top-to-bottom run karo (`Shift+Enter`). Kernel ka Python path first cell mein verify karo.
-    Standalone Jupyter users: install `jupyterlab` in this environment and run `python -m jupyter lab`.
+    **Setup:** install dependencies with
+    `.venv/bin/python -m pip install -r requirements-notebook.txt`.
+    In VS Code, choose **Select Kernel → Python Environments → .venv** and run cells
+    from top to bottom with `Shift+Enter`. The first code cell prints the active Python path.
+    For standalone Jupyter, install `jupyterlab` and run `python -m jupyter lab`.
     """)
     markdown("""
     ## 1. Imports and project location
-    Notebook shared cleaning/feature functions use karti hai, taaki CLI aur notebook ka logic same rahe.
-    Project root aur `notebooks/` dono working directories supported hain.
+
+    Locate the project directory and import the shared cleaning, feature-building,
+    training and prediction functions. Both the project root and `notebooks/` are
+    supported working directories. Reusing these functions keeps the notebook and
+    command-line implementation consistent.
     """)
     code("""
     from pathlib import Path
@@ -71,11 +79,17 @@ def create_notebook():
     print('Target unit:', UNIT)
     """)
     markdown("""
-    ## 2. Load and clean real observations
-    Source file semicolon-separated hai, decimal commas aur Western European text use karti hai.
-    Cleaning dates/weights parse karti hai aur duplicate kitchen/date reject karti hai.
-    **Missing waste ko zero nahi banayenge.** Zero actual measured value bhi ho sakta hai.
-    Same-day portions/served counts ko pre-service inputs nahi banayenge.
+    ## 2. Load and clean the observations
+
+    The original CSV uses semicolon separators, decimal commas and cp1252 text encoding.
+    Cleaning retains kitchen identity, date and measured waste; trims kitchen-name
+    whitespace; converts dates and numbers; and rejects duplicate kitchen/date pairs,
+    missing kitchen identifiers and invalid or negative measured weights.
+
+    **Missing waste is not zero waste.** Missing measurements remain missing, while real
+    zero values and unusually large observations are retained. Rows without a measured
+    target are excluded later from training and scoring. Same-day served portions are
+    not used as predictors because they are not assumed available before the service.
     """)
     code("""
     raw = pd.read_csv(RAW_PATH, sep=';', encoding='cp1252', dtype=str)
@@ -91,12 +105,19 @@ def create_notebook():
     clean.to_csv(CLEAN_PATH, index=False, date_format='%Y-%m-%d')
     """)
     markdown("""
-    ## 3. Build features using only earlier observations
-    Features: kitchen, previous 3 measured wastes, recent averages, historical mean,
-    history count and calendar cycles. Category encoding/scaling training partition par hi fit hogi.
+    ## 3. Build features from earlier measurements
 
-    Har prediction ko minimum 3 prior measurements aur previous calendar day ki measurement chahiye.
-    Missing dates ko zero nahi samjhenge. Seven observations ka average necessarily seven calendar days ka average nahi hai.
+    Each example has input features (**X**) and a recorded waste target (**y**).
+    Inputs include kitchen identity, the last three measured waste amounts, recent
+    three- and seven-observation means, recent variation, historical mean, measurement
+    count, and weekday/month cycles. Calendar cycles use sine and cosine so neighbouring
+    values remain close across week and year boundaries.
+
+    Every forecast requires at least three prior measurements, including one from the
+    previous calendar day. A seven-observation window may span more than seven calendar
+    days. The current target is added to history only after its input features are built,
+    preventing it from leaking into its own prediction. Encoding and scaling are fitted
+    later inside the training pipeline.
     """)
     code("""
     examples = build_forecast_rows(clean).dropna(subset=[TARGET]).reset_index(drop=True)
@@ -105,11 +126,17 @@ def create_notebook():
     display(examples.head())
     """)
     markdown("""
-    ## 4. Chronological train / validation / test split
-    Purani 60% eligible dates training, next 20% validation, latest 20% final test.
-    Same date different partitions mein nahi aati. Cold-start kitchens fit time par unseen hon toh score se exclude honge.
+    ## 4. Split dates chronologically
 
-    Validation se model choose karo; final test ko dekhkar model/settings mat choose karo.
+    Use the earliest 60% of eligible dates for training, the next 20% for validation and
+    the latest 20% for testing. These proportions apply to distinct dates, not row counts;
+    all records on a given date stay in the same partition.
+
+    Training learns the parameters, validation selects among the fixed ML candidates,
+    and the test period measures performance. Validation excludes kitchens absent from
+    the training fit. Model selection uses validation MAE rather than test scores.
+    The existing test period was inspected in an earlier experiment, so this revision
+    does not constitute evaluation on a fresh untouched holdout.
     """)
     code("""
     training, validation_all, test_all = chronological_split(examples)
@@ -133,15 +160,23 @@ def create_notebook():
     plt.show()
     """)
     markdown("""
-    ## 5. Train the ML models — yahin training hoti hai
-    `X_train` questions/inputs hain; `y_train` actual measured answers hain.
-    **`model.fit(X_train, y_train)`** model ko relationship sikhata hai.
+    ## 5. Train the regression models
 
-    `candidates()` defines three scikit-learn pipelines: Ridge Regression, Decision Tree
-    and Random Forest. Har pipeline kitchen encode, numeric inputs scale aur regressor fit karti hai.
-    `predict()` learned relationship se validation waste estimate karta hai.
+    `X_train` contains predictor columns; `y_train` contains the actual recorded waste.
+    **`model.fit(X_train, y_train)` is the training step.** It learns preprocessing
+    statistics and model parameters from the training partition.
+
+    `candidates()` defines pipelines for Ridge Regression, Decision Tree and Random Forest.
+    Each pipeline one-hot encodes kitchen identity and standardizes numeric inputs before
+    fitting the regressor. Scaling is particularly relevant to Ridge's coefficient penalty.
+
+    Ridge is linear regression with an **L2 penalty** on coefficient magnitude. Here
+    `alpha=10.0` is a fixed penalty strength, not a tuned optimum. `predict()` applies the
+    learned pipeline to validation inputs; negative estimates are clipped to zero because
+    waste is nonnegative.
     """)
     code("""
+    # X contains the input features; y contains the measured value to predict.
     X_train = training[FEATURES]
     y_train = training[TARGET]
     X_validation = validation[FEATURES]
@@ -150,40 +185,57 @@ def create_notebook():
     models = candidates()
     validation_results = {}
     for name, model in models.items():
-        model.fit(X_train, y_train)  # ACTUAL ML TRAINING
+        # Learn the encoder/scaler statistics and regressor parameters on training only.
+        model.fit(X_train, y_train)
         validation_prediction = np.maximum(0, model.predict(X_validation))
         validation_results[name] = scores(y_validation, validation_prediction)
         print(f'Trained {name}: validation MAE = {validation_results[name]["MAE"]:.3f}')
     """)
     markdown("""
-    ## 6. Compare ML with simple baselines, then freeze selection
-    Baselines: previous-day value, recent seven-observation average, historical kitchen average.
-    Lowest **validation MAE** wins. Baseline win kare toh honestly report karo;
-    sirf ML use karne ke liye weaker candidate select mat karo. R² classification accuracy nahi hai.
+    ## 6. Compare validation results and select the ML model
+
+    The baselines repeat yesterday's waste, average up to seven earlier measurements,
+    or use the kitchen's historical mean. They require no fitted regression coefficients.
+
+    The project selects the lowest **validation MAE among trained ML candidates**,
+    which selects Ridge Regression on this dataset. The seven-observation mean has
+    slightly lower validation MAE and remains visible as a benchmark. Ridge is therefore
+    the best validated ML candidate here, not the best of all forecasting methods.
+
+    **Metrics:** MAE is average absolute error; RMSE penalizes larger errors more strongly.
+    Both use the target's units and lower is better. R² compares squared error with a
+    mean-target reference, can be negative, and is not classification accuracy.
     """)
     code("""
     for name, feature in BASELINES.items():
         validation_results[name] = scores(y_validation, validation[feature])
     comparison = pd.DataFrame(validation_results).T.sort_values('MAE')
     display(comparison)
+    # Compare trained ML models only; baselines remain visible benchmarks.
     best_ml_name = min(models, key=lambda name: validation_results[name]['MAE'])
-    selected_name = min(validation_results, key=lambda name: validation_results[name]['MAE'])
+    selected_name = best_ml_name
     print('Best ML candidate by validation MAE:', best_ml_name)
-    print('Selected overall method:', selected_name)
+    print('Selected ML model:', selected_name)
     """)
     markdown("""
-    ## 7. Refit the selected method and evaluate the final holdout
-    Ab choice frozen hai. Selected ML ho toh train + validation par refit hoti hai.
-    Selected baseline ko `.fit()` ki zaroorat nahi hoti.
+    ## 7. Refit the selected model and evaluate the holdout
 
-    **Rolling next-day evaluation:** test period mein earlier days ke measured actuals later predictions
-    ke history inputs ban sakte hain. Ye poore future period ka ek saath multi-day forecast nahi hai.
+    After selecting the ML candidate, fit a fresh copy of its pipeline on the combined
+    training and validation partitions. This refit includes the encoder and scaler.
+    The test targets are not used to fit the saved pipeline. Test scoring includes only
+    kitchens represented in this combined fit.
+
+    **Rolling next-day evaluation:** earlier test-day actual measurements may inform
+    features for later test-day forecasts, as they would become available in daily use.
+    The model weights stay fixed. This is not a multi-day forecast made without new
+    measurements. The test period was previously inspected and is not a fresh holdout.
     """)
     code("""
     fit_rows = pd.concat([training, validation_all], ignore_index=True)
     test = test_all[test_all.kitchen.isin(fit_rows.kitchen.unique())].copy()
     final_model = None
     if selected_name in models:
+        # Start a fresh pipeline, then fit on train + validation without test targets.
         final_model = clone(models[selected_name])
         final_model.fit(fit_rows[FEATURES], fit_rows[TARGET])
 
@@ -193,6 +245,7 @@ def create_notebook():
         'training_last_date': str(fit_rows.date.max().date()),
         'evaluation_protocol': 'rolling next-day, previous calendar-day measurement required',
     }
+    # Apply the fixed fitted pipeline; do not fit it on the test partition.
     test_prediction = predict_selected(payload, test[FEATURES])
     test_results = {name: scores(test[TARGET], test[feature]) for name, feature in BASELINES.items()}
     test_results[selected_name] = scores(test[TARGET], test_prediction)
@@ -221,9 +274,15 @@ def create_notebook():
     display(per_kitchen.sort_values('MAE', ascending=False))
     """)
     markdown("""
-    ## 8. Save your notebook-trained artifacts
-    Notebook ke outputs alag names se save honge. Existing app aur CLI model overwrite nahi honge.
-    Scores/versions save hote hain; model pickle sirf apne trusted local artifacts se load karo.
+    ## 8. Save the notebook-trained model and metadata
+
+    Save the fitted pipeline, feature schema, known kitchens, training cutoff, metrics,
+    data checksum and software versions. Notebook artifacts have separate names from
+    the command-line artifacts. The dashboard can load either saved run and prefers the
+    notebook artifact when both exist.
+
+    Saving the entire pipeline ensures prediction uses the same encoding and scaling
+    learned during fitting. Only load pickle artifacts from trusted sources.
     """)
     code("""
     output = ROOT / 'model'
@@ -246,9 +305,14 @@ def create_notebook():
     print('Saved:', output / 'real_notebook_model.pkl')
     """)
     markdown("""
-    ## 9. Predict one historical next day with your saved method
-    Ye historical example hai. Aaj ki prediction ke liye updated prior-day measured history chahiye.
-    Forecast helper current/future actuals ignore karta hai aur unseen kitchen / stale history reject karta hai.
+    ## 9. Generate one historical next-day forecast
+
+    Load the saved artifact and predict waste for Copenhagen / Axel on 22 November 2018.
+    Only earlier measurements are used. The forecast function rejects dates within the
+    fitting period, unknown kitchens and history without a previous-day measurement.
+
+    This is a historical example. A present-day forecast requires updated measurements;
+    reliability in current operations must be evaluated separately.
     """)
     code("""
     with (ROOT / 'model/real_notebook_model.pkl').open('rb') as f:
@@ -256,14 +320,21 @@ def create_notebook():
     display(forecast(saved, clean, 'Copenhagen / Axel', '2018-11-22'))
     """)
     markdown("""
-    ## Interpretation for your report / viva
-    - Models real measured records par train hue, synthetic labels par nahi.
-    - Selection validation MAE se hui; final test se candidate choose nahi hua.
-    - Baseline selected ho toh usse trained ML regressor mat bolo. ML models compare karna valid experiment hai.
-    - Results covered kitchens ki 2018 services ke liye hain; unseen kitchens aur current Indian operations par reliability establish nahi hui.
-    - Overall R² kitchen differences se influence ho sakta hai; per-kitchen errors bhi dekho.
-    - Exact exported weight unit unresolved hai. Financial loss/preparation advice abhi justified nahi hai.
-    - Test results dekhkar repeated tuning karogi toh final test independent nahi rahega; fresh holdout chahiye hoga.
+    ## Interpretation and project limitations
+
+    - Models are trained on recorded observations, not synthetically generated targets.
+    - Ridge Regression is selected by validation MAE among the trained ML candidates.
+      The moving-average baseline has slightly lower validation MAE.
+    - Test metrics describe an existing holdout inspected in earlier experiments; this
+      revision does not establish performance on a fresh independent dataset.
+    - Results concern the covered kitchens' 2018 records. They do not establish reliability
+      for new restaurants, present-day Indian kitchens or unrecorded services.
+    - Aggregate R² may reflect differences between kitchens. Inspect per-kitchen errors
+      alongside overall metrics.
+    - The export's exact weight unit is unconfirmed; financial losses and preparation
+      recommendations are outside the validated scope.
+    - Further changes based on test performance require a fresh holdout for an independent
+      assessment.
     """)
     notebook = {
         'cells': cells,

@@ -71,6 +71,21 @@ class RealAppTests(unittest.TestCase):
         expected = forecast(changed, load_clean_data(), "Copenhagen / Axel", self.app.date_input[0].value)
         self.assertAlmostEqual(float(self.app.metric[0].value), expected["predicted_waste"])
 
+    def test_trained_ridge_forecast_shows_model_inputs(self):
+        with (ROOT / "model/real_food_waste_model.pkl").open("rb") as f:
+            ridge_payload = pickle.load(f)
+        self.assertEqual(ridge_payload["selected_name"], "Ridge Regression")
+        self.assertIsNotNone(ridge_payload["model"])
+        self.save(ridge_payload)
+        self.app.run()
+        self.app.button[0].click().run()
+        self.assertFalse(self.app.exception)
+        expected = forecast(ridge_payload, load_clean_data(), "Copenhagen / Axel", self.app.date_input[0].value)
+        self.assertAlmostEqual(float(self.app.metric[0].value), expected["predicted_waste"])
+        self.assertTrue(any("lag_1" in frame.value.columns for frame in self.app.dataframe))
+        self.select_view("Overview")
+        self.select_view("Training results")
+
     def test_missing_artifact_has_setup_guidance(self):
         self.artifact.unlink()
         self.app.run()

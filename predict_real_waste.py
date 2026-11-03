@@ -11,14 +11,24 @@ from train_real_model import predict_selected
 
 
 def forecast(payload, clean, kitchen, date):
+    """Return one forecast using a saved model and strictly earlier observations.
+
+    The caller supplies kitchen identity and forecast date. The history dataset
+    provides measured waste; individual lag and calendar features are derived here.
+    """
     date = pd.Timestamp(date).normalize()
     if date <= pd.Timestamp(payload["training_last_date"]):
         raise ValueError("Forecast date must be later than the saved model's training period")
+    # Encoding an unknown category is technically possible, but predictions for
+    # new kitchens have not been validated, so this interface rejects them.
     if kitchen not in payload["known_kitchens"]:
         raise ValueError("Kitchen was not present during model fitting; no validated cold-start forecast")
+    # Ignore actual waste on the requested date and all future dates to prevent
+    # target leakage, even if those records already exist in the historical CSV.
     past = clean.loc[(clean.kitchen == kitchen) & (clean.date < date)].dropna(subset=[TARGET]).sort_values("date")
     history = list(past[["date", TARGET]].itertuples(index=False, name=None))
     features = features_from_history(kitchen, date, history)
+    # Use the training feature order and the same saved encoder/scaler at inference.
     predicted = predict_selected(payload, pd.DataFrame([features])[FEATURES])[0]
     return {"kitchen": kitchen, "forecast_date": str(date.date()),
             "predicted_waste": round(float(predicted), 3), "unit": payload["unit"],
@@ -27,6 +37,7 @@ def forecast(payload, clean, kitchen, date):
 
 
 def main():
+    """Expose the same forecast function to the command-line interface."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--kitchen", required=True)
     parser.add_argument("--date", required=True, help="Forecast date YYYY-MM-DD")
